@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>☠ Cyber Terminal — Security Chat</title>
+<style>
+  /* --- Base / Terminal Look --- */
+  :root{
+    --bg:#020302;
+    --panel:#07100b;
+    --neon:#00ff6a;   /* primary neon green */
+    --accent:#00d4ff; /* cyan for user */
+    --muted:#6b7a6f;
+    --glass: rgba(255,255,255,0.03);
+    --mono: "Source Code Pro", Consolas, Monaco, "Courier New", monospace;
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);font-family:var(--mono);color:var(--neon);-webkit-font-smoothing:antialiased;}
+  /* subtle noise overlay */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,0.01), rgba(0,0,0,0));
+    mix-blend-mode:overlay;opacity:0.7;
+  }
+
+  /* falling code background (Matrix style) */
+  .matrix {
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:transparent;
+    overflow:hidden;
+  }
+  .matrix .col {
+    position:absolute;top:-120%;width:1.6rem;white-space:nowrap;
+    animation:fall linear infinite;
+    font-weight:700;letter-spacing:0.05rem;
+    color:rgba(0,255,106,0.08);font-size:14px;
+    text-shadow:0 0 6px rgba(0,255,106,0.04);
+  }
+  @keyframes fall {
+    to { transform: translateY(300vh) rotate(0.01deg); }
+  }
+
+  /* Chat panel */
+  .terminal-wrap {
+    position:relative;z-index:2;max-width:980px;margin:4vh auto;padding:18px;box-sizing:border-box;
+  }
+  .terminal {
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
+    border-radius:10px;border:1px solid rgba(0,255,106,0.06);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
+    overflow:hidden;height:78vh;display:flex;flex-direction:column;
+    backdrop-filter: blur(6px);
+  }
+
+  /* header with ASCII vibe */
+  .term-header{
+    background:linear-gradient(90deg, rgba(0,255,106,0.02), rgba(0,212,255,0.01));
+    padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;align-items:center;gap:12px;
+  }
+  .logo {
+    font-size:14px;color:var(--neon);opacity:0.95;
+    letter-spacing:0.06rem;line-height:1;
+  }
+  .ascii {
+    font-size:12px;color:var(--muted);margin-left:6px;
+  }
+  .status {
+    margin-left:auto;font-size:12px;color:var(--muted);
+  }
+
+  /* chat area */
+  #chat-box {
+    padding:20px;flex:1;overflow:auto;background:linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+    display:flex;flex-direction:column;gap:10px;
+  }
+
+  .line {
+    display:flex;gap:10px;align-items:flex-end;max-width:85%;
+    animation:fadeUp .18s ease both;
+  }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+
+  .line.bot { align-self:flex-start; }
+  .line.user { align-self:flex-end; flex-direction:row-reverse; }
+
+  .bubble {
+    padding:10px 14px;border-radius:8px;line-height:1.45;font-size:13px;
+    background:linear-gradient(180deg, rgba(0,0,0,0.25), rgba(255,255,255,0.02));
+    border:1px solid rgba(255,255,255,0.03);color:var(--neon);max-width:70ch;word-break:break-word;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  }
+
+  .bubble.bot { color:var(--neon); border-left:3px solid rgba(0,255,106,0.12);}
+  .bubble.user { color:var(--accent); background:transparent;border:1px solid rgba(0,212,255,0.08);}
+
+  .meta { font-size:11px;color:var(--muted);margin-top:6px; }
+
+  /* input area - hacky terminal prompt */
+  .input-area {
+    padding:16px;border-top:1px solid rgba(255,255,255,0.02);display:flex;gap:10px;align-items:center;background:linear-gradient(180deg, rgba(0,0,0,0.01), rgba(0,0,0,0.02));
+  }
+
+  .prompt {
+    min-width:60px;color:var(--muted);font-size:13px;
+    display:flex;flex-direction:column;align-items:flex-start;
+  }
+  .prompt .user-tag { color:var(--accent);font-weight:700; }
+  .prompt .host { color:var(--muted);font-size:11px; margin-top:2px; }
+
+  #user-input {
+    flex:1;padding:12px 14px;background:transparent;border:1px dashed rgba(0,255,106,0.08);color:var(--neon);
+    outline:none;border-radius:6px;font-family:var(--mono);font-size:13px;
+    caret-color:var(--accent);
+  }
+
+  #user-input::placeholder { color:rgba(0,255,106,0.18);font-style:italic; }
+
+  #send-btn {
+    padding:10px 14px;border-radius:8px;border:1px solid rgba(0,212,255,0.08);background:linear-gradient(180deg, rgba(0,212,255,0.06), rgba(0,0,0,0.05));
+    color:var(--accent);cursor:pointer;font-weight:700;
+  }
+  #send-btn:disabled { opacity:0.45; cursor:not-allowed; }
+
+  /* loading / typing indicator */
+  .typing {
+    display:inline-flex;gap:6px;align-items:center;
+  }
+  .cursor {
+    width:8px;height:14px;background:var(--accent);border-radius:2px;
+    animation:blink 1s steps(2,end) infinite;
+    margin-left:6px;
+  }
+  @keyframes blink { 50% { opacity:0 } }
+
+  /* compact small screens */
+  @media (max-width:640px){
+    .terminal { height:92vh; }
+    .bubble{font-size:14px}
+    .logo{font-size:13px}
+    .ascii{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- Matrix background columns (rendered by JS) -->
+<div class="matrix" id="matrix"></div>
+
+<div class="terminal-wrap">
+  <div class="terminal" role="region" aria-label="Cybersecurity chat terminal">
+    <div class="term-header">
+      <div class="logo">☠ CYBER-TERMINAL</div>
+      <div class="ascii">[root@host ~] — <span style="color:var(--neon)">v0.9.ledger</span></div>
+      <div class="status" id="status">online • secure</div>
+    </div>
+
+    <div id="chat-box" aria-live="polite"></div>
+
+    <div class="input-area">
+      <div class="prompt">
+        <div class="user-tag">user@terminal</div>
+        <div class="host">~$</div>
+      </div>
+
+      <input id="user-input" placeholder="probe vulnerabilities, ask security tips, phishing checks..." autocomplete="off" />
+      <button id="send-btn">EXECUTE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* -----------------------------
+   Matrix background generator
+   ----------------------------- */
+(function createMatrix(){
+  const matrix = document.getElementById('matrix');
+  const cols = Math.floor(window.innerWidth / 30);
+  const chars = "01<>/\\|{}[]-_+=*;:.";
+  for (let i=0;i<cols;i++){
+    const div = document.createElement('div');
+    div.className='col';
+    div.style.left = (i * 28) + 'px';
+    div.style.fontSize = (12 + Math.random()*8) + 'px';
+    div.style.opacity = (0.03 + Math.random()*0.18);
+    div.style.animationDuration = (6 + Math.random()*16) + 's';
+    div.style.animationDelay = -(Math.random()*10) + 's';
+    // build random string
+    let s='';
+    for (let j=0;j<50;j++){ s += chars.charAt(Math.floor(Math.random()*chars.length)) + ' '; }
+    div.textContent = s;
+    matrix.appendChild(div);
+  }
+})();
+
+/* -----------------------------
+   Chat logic: post to /ask
+   preserves behavior: disables input,
+   shows loading, types bot response letter-by-letter.
+   ----------------------------- */
+
+const chatBox = document.getElementById('chat-box');
+const userInput = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+const statusEl = document.getElementById('status');
+
+sendBtn.addEventListener('click', sendMessage);
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// helper: timestamp
+function timeNow(){
+  const d = new Date();
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+// append message element
+function appendLine(kind, htmlContent, meta = '') {
+  const line = document.createElement('div');
+  line.className = 'line ' + (kind === 'bot' ? 'bot' : 'user');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (kind === 'bot' ? 'bot' : 'user');
+  bubble.innerHTML = htmlContent;
+  line.appendChild(bubble);
+
+  if(meta){
+    const m = document.createElement('div');
+    m.className = 'meta';
+    m.textContent = meta;
+    line.appendChild(m);
+  }
+
+  chatBox.appendChild(line);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return {line, bubble};
+}
+
+// show typing row (temporary)
+function showTyping(){
+  const {line, bubble} = appendLine('bot', '<span class="typing">analysis<span class="cursor"></span></span>');
+  return {line, bubble};
+}
+function removeElem(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
+
+// typewriter effect for bot text
+async function typebot(text, metaTime){
+  const {line, bubble} = showTyping();
+  // replace bubble content with empty and then fill
+  bubble.innerHTML = '';
+  // emulate streaming typing
+  for (let i=0;i<text.length;i++){
+    bubble.innerHTML += escapeHtml(text[i]);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    // speed variation for realism
+    await sleep(8 + Math.random()*20);
+  }
+  // attach meta time underneath
+  const m = document.createElement('div'); m.className='meta'; m.textContent = metaTime || timeNow();
+  line.appendChild(m);
+  // remove cursor class if present
+  const curs = bubble.querySelector('.cursor'); if(curs) curs.remove();
+}
+
+// small util: sleep
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// simple HTML escape to avoid accidental injection
+function escapeHtml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,"&#039;");
+}
+
+/* set input enabled/disabled */
+function setInput(enabled){
+  userInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  if(enabled){
+    sendBtn.textContent = 'EXECUTE';
+    userInput.classList.remove('disabled');
+    userInput.focus();
+    statusEl.textContent = 'online • secure';
+  } else {
+    sendBtn.textContent = 'RUNNING...';
+    statusEl.textContent = 'processing • neural';
+  }
+}
+
+/* send message (POST /ask) */
+async function sendMessage(){
+  const q = userInput.value.trim();
+  if(!q) return;
+  appendLine('user', escapeHtml(q), timeNow());
+  userInput.value = '';
+  setInput(false);
+
+  // show minimal delay for UX
+  await sleep(120);
+
+  let tmpTypingLine = null;
+  try {
+    // create a lightweight heartbeat typing indicator while waiting
+    tmpTypingLine = showTyping();
+
+    const resp = await fetch('/ask', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question: q })
+    });
+
+    if(!resp.ok){
+      const txt = await resp.text().catch(()=>null);
+      throw new Error(txt || 'server error');
+    }
+    const data = await resp.json();
+
+    // remove the temporary typing and type actual answer
+    removeElem(tmpTypingLine.line);
+    await typebot(data.answer || '[no answer]', data.time || timeNow());
+
+  } catch (err) {
+    removeElem(tmpTypingLine && tmpTypingLine.line);
+    appendLine('bot', '<span style="color:tomato">Error:</span> ' + escapeHtml(err.message || 'connection failed'), timeNow());
+    console.error('chat error', err);
+  } finally {
+    setInput(true);
+  }
+}
+
+// quick focus on load
+window.addEventListener('load', ()=>{ userInput.focus(); });
+
+/* Accessibility: announce welcome line */
+appendLine('bot', '█ Welcome to <strong>CYBER-TERMINAL</strong>\nType your query and press EXECUTE. (<em>phishing, hardening, incident response tips</em>)', timeNow());
+</script>
+</body>
+</html>
